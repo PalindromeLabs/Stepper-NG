@@ -32,6 +32,9 @@ public class PromptVariable extends PreExecutionStepVariable {
 
     @Override
     public void updateVariableBeforeExecution() {
+        // A sequence argument / X-Stepper-Argument value was injected for this run; keep it
+        // instead of prompting (which would discard the override).
+        if (isOverridden()) return;
         final String[] result = {null};
         if (javax.swing.SwingUtilities.isEventDispatchThread()) {
             result[0] = JOptionPane.showInputDialog(Stepper.suiteFrame(), "Enter value for variable \"" + this.identifier + "\": ",

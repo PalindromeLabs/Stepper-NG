@@ -68,6 +68,10 @@ public class StepSequence
     }
 
     public void executeThroughStep(Step target) {
+        executeThroughStep(target, null);
+    }
+
+    public void executeThroughStep(Step target, Map<String, String> arguments) {
         if (target == null || this.isExecuting || this.disabled) return;
         int targetIdx = this.steps.indexOf(target);
         if (targetIdx < 0) return;
@@ -80,6 +84,8 @@ public class StepSequence
             synchronized (this) {
                 if (this.isExecuting || this.disabled) return;
                 this.isExecuting = true;
+                // Apply sequence-argument / X-Stepper-Argument overrides; restored in finally.
+                Map<StepVariable, String> savedValues = applyArgumentOverrides(arguments);
                 StepperUI.ExecutionHost host = null;
                 try {
                     host = Stepper.getUI() != null ? Stepper.getUI().getExecutionHost(this) : null;
@@ -90,6 +96,7 @@ public class StepSequence
                     }
                     runConditionalLoop(targetIdx, host);
                 } finally {
+                    restoreArgumentOverrides(savedValues);
                     for (SequenceExecutionListener l : this.sequenceExecutionListeners) {
                         try { l.afterSequenceEnd(true); }
                         catch (Exception ex) { Stepper.montoya.logging().logToError("Stepper-NG: listener failed: " + ex.getMessage()); }
@@ -289,6 +296,35 @@ public class StepSequence
         }
     }
 
+    /**
+     * Applies sequence-argument / {@code X-Stepper-Argument} overrides to every step variable whose
+     * identifier is a key in {@code arguments}, marking each one overridden so pre/post-execution
+     * recomputation (prompt dialogs, regex capture) won't clobber the injected value. Returns the
+     * saved original values to pass to {@link #restoreArgumentOverrides(Map)} in a finally block.
+     */
+    private Map<StepVariable, String> applyArgumentOverrides(Map<String, String> arguments) {
+        Map<StepVariable, String> savedValues = new HashMap<>();
+        if (arguments == null || arguments.isEmpty()) return savedValues;
+        for (Step step : this.steps) {
+            for (StepVariable variable : step.getVariableManager().getVariables()) {
+                if (arguments.containsKey(variable.getIdentifier())) {
+                    savedValues.putIfAbsent(variable, variable.getValue());
+                    variable.setValue(arguments.get(variable.getIdentifier()));
+                    variable.setOverridden(true);
+                }
+            }
+        }
+        return savedValues;
+    }
+
+    /** Clears override flags and restores the values saved by {@link #applyArgumentOverrides(Map)}. */
+    private void restoreArgumentOverrides(Map<StepVariable, String> savedValues) {
+        for (Map.Entry<StepVariable, String> entry : savedValues.entrySet()) {
+            entry.getKey().setOverridden(false);
+            entry.getKey().setValue(entry.getValue());
+        }
+    }
+
     public void executeBlocking(Map<String, String> arguments){
         executeBlocking(arguments, false);
     }
@@ -323,18 +359,8 @@ public class StepSequence
                 if (this.disabled) return;
                 this.isExecuting = true;
 
-                Map<StepVariable, String> savedValues = new HashMap<>();
-                if (arguments != null && !arguments.isEmpty()) {
-                    // Override step-level variables by identifier; restored in finally.
-                    for (Step step : this.steps) {
-                        for (StepVariable variable : step.getVariableManager().getVariables()) {
-                            if (arguments.containsKey(variable.getIdentifier())) {
-                                savedValues.putIfAbsent(variable, variable.getValue());
-                                variable.setValue(arguments.get(variable.getIdentifier()));
-                            }
-                        }
-                    }
-                }
+                // Override step-level variables by identifier; restored in finally.
+                Map<StepVariable, String> savedValues = applyArgumentOverrides(arguments);
 
                 StepperUI.ExecutionHost host = null;
                 try {
@@ -560,9 +586,7 @@ public class StepSequence
                         listener.afterSequenceEnd(sequenceSuccess);
                     }
                 } finally {
-                    for (Map.Entry<StepVariable, String> entry : savedValues.entrySet()) {
-                        entry.getKey().setValue(entry.getValue());
-                    }
+                    restoreArgumentOverrides(savedValues);
                     if (host != null) {
                         try { host.endExecution(); } catch (Exception ignored) {}
                     }

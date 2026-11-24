@@ -91,6 +91,9 @@ public class RegexVariable extends PostExecutionStepVariable {
     }
 
     private void applyRegex(String response) {
+        // A sequence argument / X-Stepper-Argument value was injected for this run; keep it
+        // instead of re-capturing from the response (which would discard the override).
+        if (isOverridden()) return;
         Pattern p = ensureCompiled();
         if (p == null) return;
         Matcher m = p.matcher(response);

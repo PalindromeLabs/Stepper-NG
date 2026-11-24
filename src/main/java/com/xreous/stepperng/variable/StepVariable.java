@@ -22,6 +22,9 @@ public abstract class StepVariable {
     protected volatile String value;
     protected boolean published;
     protected transient long lastUpdated;
+    // True while a sequence-argument / X-Stepper-Argument override is active for this run;
+    // prevents pre/post-execution recomputation from clobbering the injected value.
+    protected transient volatile boolean overridden;
 
     private StepVariable(){
 
@@ -75,6 +78,9 @@ public abstract class StepVariable {
         this.published = published;
         notifyChanges();
     }
+
+    public boolean isOverridden() { return overridden; }
+    public void setOverridden(boolean overridden) { this.overridden = overridden; }
 
     public static Pattern createIdentifierPatternWithSequence(String sequence, String identifier){
         return Pattern.compile(Pattern.quote(createVariableString(sequence, identifier)), Pattern.CASE_INSENSITIVE);

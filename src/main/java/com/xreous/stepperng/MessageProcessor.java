@@ -184,7 +184,7 @@ public class MessageProcessor implements HttpHandler {
                     merged.putAll(info.arguments);
                     List<Step> snapshot = info.sequence.getSteps();
                     if (info.upToIndexInclusive >= 0 && info.upToIndexInclusive < snapshot.size()) {
-                        info.sequence.executeThroughStep(snapshot.get(info.upToIndexInclusive));
+                        info.sequence.executeThroughStep(snapshot.get(info.upToIndexInclusive), merged);
                     } else {
                         info.sequence.executeBlocking(merged);
                     }
